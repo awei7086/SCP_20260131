@@ -140,9 +140,6 @@ unsigned int ShotDown=0;
 __interrupt void INT_INV_HPWM_ISR(void)
 {
 
-    GpioDataRegs.GPBTOGGLE.bit.GPIO40=1;
-
-
     wt += 2.0f * 3.1415926f * f * Inv_PWM_Ts; // 2*pi*f*t
     if(wt >= 2.0f * 3.1415926f)
     {
@@ -154,6 +151,15 @@ __interrupt void INT_INV_HPWM_ISR(void)
 
     Sinwt = sinf(wt);   // -1 ~ +1
 
+    // GPIO40 high for exactly one ISR sample when phase crosses pi/2
+    if((wt >= 1.5707963f) && ((wt - (2.0f * 3.1415926f * f * Inv_PWM_Ts)) < 1.5707963f))
+    {
+        GpioDataRegs.GPBSET.bit.GPIO40 = 1;
+    }
+    else
+    {
+        GpioDataRegs.GPBCLEAR.bit.GPIO40 = 1;
+    }
 
 
     if( Sinwt < 0)
