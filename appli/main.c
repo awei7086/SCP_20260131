@@ -12,6 +12,7 @@
 #include "c2000ware_libraries.h"
 #include "h\SysConfig.h"
 #include "h\ADC.h"
+#include "h\PuRec.h"
 
 /*
 #include "h\Charger.h"
@@ -77,8 +78,12 @@ void main(void)
     // PinMux and Peripheral Initialization
     //
     Board_init();
-    //EPwm6Regs.AQCSFRC.bit.CSFA=1;
-    //EPwm6Regs.AQCSFRC.bit.CSFB=1;
+
+    EDIS;
+
+    PuPu_Off();
+    Rec_Off();
+
 
     //
     // C2000Ware Library initialization
@@ -108,7 +113,10 @@ void main(void)
 
     EALLOW;
     EPwm2Regs.TZCLR.all = 0xFF;      // 清除TZ殘留旗標
+    EPwm4Regs.ETCLR.bit.INT = 1;
     EDIS;
+
+
     //
     // Enable Global Interrupt (INTM) and real time interrupt (DBGM)
     //
@@ -139,13 +147,22 @@ unsigned int ShotDown=0;
 
 __interrupt void INT_INV_HPWM_ISR(void)
 {
+    // --- 中斷嵌套：允許 Rec_PWM (INT3.4) 搶佔 ---
+    uint16_t TempPIEIER3 = PieCtrlRegs.PIEIER3.all;
+
+    IER |= M_INT3;
+    IER &= M_INT3;                    // 只保留 INT3
+    PieCtrlRegs.PIEIER3.all = 0x0008; // 只允許 INT3.4 (Rec_PWM)
+    PieCtrlRegs.PIEACK.all = INTERRUPT_ACK_GROUP3;
+    asm("       NOP");
+    EINT;
+    // --- 嵌套設定完成 ---
 
     wt += 2.0f * 3.1415926f * f * Inv_PWM_Ts; // 2*pi*f*t
     if(wt >= 2.0f * 3.1415926f)
     {
         wt -= 2.0f * 3.1415926f;
         GpioDataRegs.GPATOGGLE.bit.GPIO14 = 1;
-
 
     }
 
@@ -174,20 +191,63 @@ __interrupt void INT_INV_HPWM_ISR(void)
         EALLOW;
         EPwm1Regs.CMPA.bit.CMPA = Sinwt  * INV_PWM_TBPRD;
         EPwm2Regs.CMPA.bit.CMPA = INV_PWM_TBPRD+1;
-        EDIS;
+
     }
 
+    // --- 恢復中斷狀態 ---
+    DINT;
+    PieCtrlRegs.PIEIER3.all = TempPIEIER3;
 
-
+    EALLOW;
     EPwm1Regs.ETCLR.bit.INT = 1;
     PieCtrlRegs.PIEACK.all = INTERRUPT_ACK_GROUP3;
+    EDIS;
+
 }
 
 
 
 
 
+__interrupt void INT_Rec_PWM_ISR(void)
+{
 
+    EALLOW;
+    //以下需修改(for test)
+    EPwm6Regs.CMPA.bit.CMPA = PuPu.u16_CMPA;
+    EPwm6Regs.CMPB.bit.CMPB = PuPu.u16_CMPB;
+    EPwm4Regs.CMPA.bit.CMPA = PuPu.u16_CMPA;
+    EPwm4Regs.CMPB.bit.CMPB = PuPu.u16_CMPB;
+
+    EDIS;
+    if(GpioDataRegs.GPADAT.bit.GPIO27 == 1)
+    {
+
+
+        PuPu_SoftStart();
+    }
+
+    else
+    {
+        //Rec_Off();
+        //PuPu_Off();
+        EPwm6Regs.CMPA.bit.CMPA = 0;
+        EPwm6Regs.CMPB.bit.CMPB = 0;
+
+        EPwm4Regs.CMPA.bit.CMPA = 0;
+        EPwm4Regs.CMPB.bit.CMPB = 0;
+
+        PuPu.f_Buf=0;
+    }
+
+    Rec_On();
+    PuPu_On();
+
+    EALLOW;
+    EPwm4Regs.ETCLR.bit.INT = 1;
+    PieCtrlRegs.PIEACK.all = INTERRUPT_ACK_GROUP3;
+    EDIS;
+}
 
 
 
@@ -198,6 +258,16 @@ __interrupt void INT_INV_HPWM_ISR(void)
 
 __interrupt void INT_myCPUTIMER0_ISR(void)
 {//20KHz (50usec)
+
+    // --- 中斷嵌套：允許 Group3 (Rec_PWM + INV_HPWM) 搶佔 ---
+    uint16_t TempPIEIER1 = PieCtrlRegs.PIEIER1.all;
+
+    IER |= M_INT3;
+    IER &= M_INT3;          // 只保留 INT3，屏蔽自身 INT1
+    PieCtrlRegs.PIEACK.all = INTERRUPT_ACK_GROUP1;
+    asm("       NOP");
+    EINT;
+    // --- 嵌套設定完成 ---
 
     /*
 
@@ -291,8 +361,11 @@ __interrupt void INT_myCPUTIMER0_ISR(void)
 
 
 
-    //EINT;                                         //中斷嵌套 (interrupt nesting) disable EINT
-    Interrupt_clearACKGroup(INTERRUPT_ACK_GROUP1);  //中斷嵌套 (interrupt nesting)
+    // --- 恢復中斷狀態 ---
+    DINT;
+    PieCtrlRegs.PIEIER1.all = TempPIEIER1;
+
+    Interrupt_clearACKGroup(INTERRUPT_ACK_GROUP1);
 }
 
 
