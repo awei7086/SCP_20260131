@@ -1,7 +1,7 @@
 /*
  * SysConfig.h
  *
- *  Created on: 2025¦~10¤ë10¤é
+ *  Created on: 2025ï¿½~10ï¿½ï¿½10ï¿½ï¿½
  *      Author: wujw
  */
 
@@ -9,6 +9,7 @@
 #define H_SYSCONFIG_H_
 
 #define SYSCLK_FREQ    100000000UL
+
 #define INV_PWM_FREQ   30000UL
 #define INV_PWM_TBPRD  SYSCLK_FREQ/(INV_PWM_FREQ*2)   // up/down counter
 
@@ -16,8 +17,7 @@
 #define Inv_PWM_Ts            1.0f/INV_PWM_FREQ
 
 
-#define PuRec_PWM_FREQ   20000UL
-#define PuRec_PWM_TBPRD  SYSCLK_FREQ/(PuRec_PWM_FREQ*2)   // up/down counter
+
 
 
 
@@ -56,6 +56,7 @@
 
 //GPIO input pin define
 #define _SW_ON      GpioDataRegs.GPADAT.bit.GPIO9
+#define _Ext_On     GpioDataRegs.GPADAT.bit.GPIO29
 #define _DetBTS     GpioDataRegs.GPADAT.bit.GPIO27
 #define _NTC_IO     GpioDataRegs.GPBDAT.bit.GPIO44
 
@@ -70,112 +71,12 @@
 
 
 
-typedef struct
-{
-    unsigned int    u16_AMP_A;
-    unsigned int    u16_AMP_B;
-    unsigned int    u16_AMP_C;
-
-    unsigned int    u16_VOL_A;
-    unsigned int    u16_VOL_B;
-    unsigned int    u16_VOL_C;
-    unsigned int    u16_VOL;
-
-    unsigned int    u16_ACIN;
-
-}TY_Tune;
-
-
-typedef struct
-{
-    unsigned int    u16_VRate;
-    unsigned int    u16_IRate;
-}TY_Rate;
-
-
-typedef struct _ST_EE_SET
-{
-    TY_Rate   BatBank;
-    TY_Rate   StartBat;
-
-    TY_Tune   AD_Gain;              // AD Gain   (3276 ~ 4915 ==> Q10 mode)
-    TY_Tune   AD_Offset;            // AD Offset (+/- 819 = 4096 * 20% )
-
-}TY_st_EE_Set;
-extern TY_st_EE_Set EE_Set;
-
-
-typedef struct
-{
-    TY_Rate   BatBank;
-    TY_Rate   StartBat;
-
-}TY_SpecMax;
-extern TY_SpecMax st_SpecMax;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-typedef struct
-{
-    unsigned int    u16_ModbusID;       //def=1 modbus ID
-
-}TY_USER_Set;
-extern  TY_USER_Set st_USER_Set;
-
-
-typedef struct
-{
-    unsigned int    VBB_shift;
-    unsigned int    VSB_shift;
-
-}TY_SysPar;
-extern TY_SysPar SysPar;
-
-
-
-
-
-
+// EE_Set definitions moved to h\EEprom\EE_Set.h
 
 extern void SysConfig(void);
-extern void Init_Def_EE_Set(void);
-extern void Init_Def_USER_Set(void);
-unsigned int Force_ADC_Sample(void);
+extern void EEprom_init(void);
+
 void SCI_init(void);
 
-void InitI2C(void);
-void Load_Rate_To_Max(void);
-void Init_Def_LCM_Pro_Set(void);
 
 #endif /* H_SYSCONFIG_H_ */

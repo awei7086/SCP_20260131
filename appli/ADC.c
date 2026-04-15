@@ -1,146 +1,108 @@
 /*
  * ADC.c
  *
- *  Created on: 2024¶~7§Î9§È
+ *  Created on: 2024ÂöôÁæØ7ÂöôË∏ùËï≠9ÂöôË∏ùËï≠
  *      Author: wujw
  */
 
 #include "f28002x_device.h"
 #include "h\ADC.h"
 #include "h\MovAvg.h"
-#include <math.h>
 #include "h\SysConfig.h"
-//#include "h\Compensation.h"
+#include "h\Cal_ADC_Max.h"
+#include "h\EEprom\EE_Set.h"
 
-#define Q24 16777216
-#define Q23 8388608
 
-TY_MovAvg8  MovAvg_AMP_A = MOV_AVG8_DEFAULT;
-TY_MovAvg8  MovAvg_AMP_B = MOV_AVG8_DEFAULT;
-TY_MovAvg8  MovAvg_AMP_C = MOV_AVG8_DEFAULT;
-
-TY_MovAvg8  MovAvg_VOL_A = MOV_AVG8_DEFAULT;
-TY_MovAvg8  MovAvg_VOL_B = MOV_AVG8_DEFAULT;
-TY_MovAvg8  MovAvg_VOL_C = MOV_AVG8_DEFAULT;
+#define Q22  (1.0f / 4194304.0f)     // 1/2^22 = 1/(2048*2048), for AC (with offset)
+#define Q23  (1.0f / 8388608.0f)     // 1/2^23 = 1/(2048*4096), for DC (no offset)
 
 TY_MovAvg8  MovAvg_VOL = MOV_AVG8_DEFAULT;
 
 TY_st_Ad_Value st_Ad_Value;
-TY_st_EE_Set EE_Set;
+
 
 void Clr_ADC_Value(void)
 {
-    //clear Fast speed AD sensor
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_A = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_B = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_C = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_AMP = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_A = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_B = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_C = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_VOL = 0;
-    st_Ad_Value.ADC_Fast_Speed.f_ACIN = 0;
-
-    //clear Low speed AD sensor
-    st_Ad_Value.ADC_Low_Speed.s16_NTC1 = 0;
-    st_Ad_Value.ADC_Low_Speed.s16_NTC2 = 0;
+    // Pu values
+    st_Ad_Value.Pu.f_Igrid = 0;
+    st_Ad_Value.Pu.f_Vgrid = 0;
+    st_Ad_Value.Pu.f_Ibat  = 0;
+    st_Ad_Value.Pu.f_Io    = 0;
+    st_Ad_Value.Pu.f_IL    = 0;
+    st_Ad_Value.Pu.f_SavIo = 0;
+    st_Ad_Value.Pu.f_Vbus  = 0;
+    st_Ad_Value.Pu.f_Vo    = 0;
+    st_Ad_Value.Pu.f_Vbat  = 0;
+    st_Ad_Value.ADC_Low_Speed.s16_Tbat = 25;
+    st_Ad_Value.ADC_Low_Speed.s16_Tmos1 = 25;
 }
 
 
-float s16_Temp=0;
 
-void Fast_speed_ADCRESULT_to_Reg(void)
+
+void Fast_speed_ADC_to_Pu(void)
 {
+    // AC Pu values (range: -1.0 ~ 1.0)
+    st_Ad_Value.Pu.f_Igrid = ((float)AdcaResultRegs.ADCRESULT0 - (float)EE_Set.u16_Offset.Igrid)
+                           * (float)EE_Set.u16_Gain.Igrid * Q22;
+    st_Ad_Value.Pu.f_Vgrid = ((float)AdcaResultRegs.ADCRESULT1 - (float)EE_Set.u16_Offset.Vgrid)
+                           * (float)EE_Set.u16_Gain.Vgrid * Q22;
+    st_Ad_Value.Pu.f_Io    = ((float)AdcaResultRegs.ADCRESULT3 - (float)EE_Set.u16_Offset.Io)
+                           * (float)EE_Set.u16_Gain.Io    * Q22;
+    st_Ad_Value.Pu.f_IL    = ((float)AdcaResultRegs.ADCRESULT4 - (float)EE_Set.u16_Offset.IL)
+                           * (float)EE_Set.u16_Gain.IL    * Q22;
+    st_Ad_Value.Pu.f_SavIo = ((float)AdcaResultRegs.ADCRESULT5 - (float)EE_Set.u16_Offset.SavIo)
+                           * (float)EE_Set.u16_Gain.SavIo * Q22;
+    st_Ad_Value.Pu.f_Vo    = ((float)AdcaResultRegs.ADCRESULT7 - (float)EE_Set.u16_Offset.Vo)
+                           * (float)EE_Set.u16_Gain.Vo    * Q22;
 
-    MovAvg_AMP_A.input = (float)AdcaResultRegs.ADCRESULT0 * EE_Set.AD_Gain.u16_AMP_A / Q24;
-    MOV_AVG8_MACRO(MovAvg_AMP_A);
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_A = MovAvg_AMP_A.output;
-
-    MovAvg_AMP_B.input = (float)AdcaResultRegs.ADCRESULT1 * EE_Set.AD_Gain.u16_AMP_B / Q24;
-    MOV_AVG8_MACRO(MovAvg_AMP_B);
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_B = MovAvg_AMP_B.output;
-
-    MovAvg_AMP_C.input = (float)AdcaResultRegs.ADCRESULT2 * EE_Set.AD_Gain.u16_AMP_C / Q24;
-    MOV_AVG8_MACRO(MovAvg_AMP_C);
-    st_Ad_Value.ADC_Fast_Speed.f_AMP_C = MovAvg_AMP_C.output;
-
-    MovAvg_VOL_A.input = (float)AdcaResultRegs.ADCRESULT5 * EE_Set.AD_Gain.u16_VOL_A / Q24;
-    MOV_AVG8_MACRO(MovAvg_VOL_A);
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_A = MovAvg_VOL_A.output;
-
-    MovAvg_VOL_B.input = (float)AdcaResultRegs.ADCRESULT6 * EE_Set.AD_Gain.u16_VOL_B / Q24;
-    MOV_AVG8_MACRO(MovAvg_VOL_B);
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_B = MovAvg_VOL_B.output;
-
-    MovAvg_VOL_C.input = (float)AdcaResultRegs.ADCRESULT7 * EE_Set.AD_Gain.u16_VOL_C / Q24;
-    MOV_AVG8_MACRO(MovAvg_VOL_C);
-    st_Ad_Value.ADC_Fast_Speed.f_VOL_C = MovAvg_VOL_C.output;
-
-    MovAvg_VOL.input = (float)AdcaResultRegs.ADCRESULT4 * EE_Set.AD_Gain.u16_VOL / Q24;
-    MOV_AVG8_MACRO(MovAvg_VOL);
-    st_Ad_Value.ADC_Fast_Speed.f_VOL = MovAvg_VOL.output;
-
-    //≠p∫‚rms (float)AdcaResultRegs.ADCRESULT10 * EE_Set.AD_Gain.u16_VOL / Q24;
+    // DC Pu values (range: 0 ~ 1.0, no offset)
+    st_Ad_Value.Pu.f_Ibat  = (float)AdcaResultRegs.ADCRESULT2
+                           * (float)EE_Set.u16_Gain.Ibat  * Q23;
+    st_Ad_Value.Pu.f_Vbus  = (float)AdcaResultRegs.ADCRESULT6
+                           * (float)EE_Set.u16_Gain.Vbus  * Q23;
+    st_Ad_Value.Pu.f_Vbat  = (float)AdcaResultRegs.ADCRESULT8
+                           * (float)EE_Set.u16_Gain.VBAT  * Q23;
 }
 
 
-unsigned int u16_WaitAdcStableCou=0;
-void Low_speed_ADCRESULT_to_Reg(void)
-{//period 1msec
 
-
-    st_Ad_Value.ADC_Low_Speed.s16_NTC1 = TranTemp_NTC(AdccResultRegs.ADCRESULT8>>2);    //only used 10bit (0~1024)
-    st_Ad_Value.ADC_Low_Speed.s16_NTC2 = TranTemp_NTC(AdccResultRegs.ADCRESULT9>>2);    //only used 10bit (0~1024)
-
-}
-
-
+//=============================================================================
+// TranTemp_NTC
+//   TTC05104JSY (100K NTC) + 56.2K pull-up + 3.3V
+//   Input : 10-bit ADC value (12-bit >> 2)
+//   Output: temperature (¬∞C)
+//=============================================================================
 int TranTemp_NTC(int Temper)
 {
-    int RetTemp=0;
-    /*¶π¬‡¥´™ÌæA•Œ©Û TbatAD & TevirAD
-    ------------------------------------------------------------------------------------
-    Temp        oC                          RetTemp
-    ------------------------------------------------------------------------------------
-    1024                    -30oC>RetTemp           (((987-Temper)*86)>>5)-300
-    ------------------------------------------------------------------------------------
-    987         -30         -30oC<RetTemp<-20oC     (((969-Temper)*177)>>5)-200
-    ------------------------------------------------------------------------------------
-    969         -20         -20oC<RetTemp<-10oC     (((930-Temper)*82)>>5)-100
-    ------------------------------------------------------------------------------------
-    930         -10         -10oC<RetTemp<0oC       (((847-Temper)*38)>>5)
-    ------------------------------------------------------------------------------------
-    847         0           0oC<RetTemp<10oC        (((782-Temper)*49)>>5)+100
-    ------------------------------------------------------------------------------------
-    782          10         10oC<RetTemp<20oC       (((697-Temper)*37)>>5)+200
-    ------------------------------------------------------------------------------------
-    697          20         20oC<RetTemp<30oC       (((601-Temper)*33)>>5)+300
-    ------------------------------------------------------------------------------------
-    601          30         30oC<RetTemp<40oC       (((482-Temper)*26)>>5)+400
-    ------------------------------------------------------------------------------------
-    482          40         40oC<RetTemp<50oC       (((356-Temper)*25)>>5)+500
-    ------------------------------------------------------------------------------------
-    356          50         50oC<RetTemp<60oC       (((269-Temper)*36)>>5)+600
-    ------------------------------------------------------------------------------------
-    269          60         60oC<RetTemp<70oC       (((204-Temper)*49)>>5)+700
-    ------------------------------------------------------------------------------------
-    204         70          RetTemp<70oC            700
-    ------------------------------------------------------------------------------------
-    */
-            if(Temper>987)      RetTemp=-300;                           //Temper<-30
-        else if(Temper>969)     RetTemp=(((969-Temper)*177)>>5)-200;    //-30<Temper<-20
-        else if(Temper>930)     RetTemp=(((930-Temper)*82)>>5)-100;     //-20<Temper<-10
-        else if(Temper>847)     RetTemp=(((847-Temper)*38)>>5);         //-10<Temper<0
-        else if(Temper>782)     RetTemp=(((782-Temper)*49)>>5)+100;     //0<Temper<10
-        else if(Temper>697)     RetTemp=(((697-Temper)*37)>>5)+200;     //10<Temper<20
-        else if(Temper>601)     RetTemp=(((601-Temper)*33)>>5)+300;     //20<Temper<30
-        else if(Temper>482)     RetTemp=(((482-Temper)*26)>>5)+400;     //30<Temper<40
-        else if(Temper>356)     RetTemp=(((356-Temper)*25)>>5)+500;     //40<Temper<50
-        else if(Temper>269)     RetTemp=(((269-Temper)*36)>>5)+600;     //50<Temper<60
-        else if(Temper>204)     RetTemp=(((204-Temper)*49)>>5)+700;     //60<Temper<70
-        else if(Temper<=204)    RetTemp=(((204-Temper)*49)>>5)+700;     //70<Temper
+    //                       -30   -20   -10     0    10    20    30    40    50    60    70
+    static const int adc[] = {987, 969, 930, 847, 782, 697, 601, 482, 356, 269, 204};
+    static const int slp[] = {  0, 177,  82,  38,  49,  37,  33,  26,  25,  36,  49};
+    static const int tmp[] = {-300,-200,-100,   0, 100, 200, 300, 400, 500, 600, 700};
+    int i;
 
-        return(RetTemp/10); //§£®˙§pº∆¬I
+    if(Temper > adc[0]) return tmp[0] / 10;        // < -30¬∞C clamp
+
+    for(i = 1; i < 11; i++)
+    {
+        if(Temper > adc[i])
+            return (((adc[i] - Temper) * slp[i] >> 5) + tmp[i]) / 10;
+    }
+
+    return (((adc[10] - Temper) * slp[10] >> 5) + tmp[10]) / 10;   // > 70¬∞C
+}
+
+
+void Low_speed_ADCRESULT_to_Reg(void)
+{//period 1msec
+    // ADCC SOC1~SOC2 (Trigger: CPU Timer0) - NTC temperature
+    st_Ad_Value.ADC_Low_Speed.s16_Tbat     = TranTemp_NTC(AdccResultRegs.ADCRESULT1 >> 2);  // C11, Pin24
+    st_Ad_Value.ADC_Low_Speed.s16_Tmos1    = TranTemp_NTC(AdccResultRegs.ADCRESULT2 >> 2);  // C0,  Pin16
+
+    // ADCC SOC3~SOC5 (Trigger: CPU Timer0)
+    st_Ad_Value.ADC_Low_Speed.f_Reserver2  = (float)AdccResultRegs.ADCRESULT3;  // C1,  Pin22
+    st_Ad_Value.ADC_Low_Speed.f_Reserver3  = (float)AdccResultRegs.ADCRESULT4;  // C4,  Pin15
+    st_Ad_Value.ADC_Low_Speed.f_Reserver4  = (float)AdccResultRegs.ADCRESULT5;  // C7,  Pin14
 }
 
 

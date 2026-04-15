@@ -158,6 +158,12 @@ __interrupt void INT_INV_HPWM_ISR(void)
     EINT;
     // --- 嵌套設定完成 ---
 
+    Fast_speed_ADC_to_Pu();
+    Low_speed_ADCRESULT_to_Reg();
+
+
+
+
     wt += 2.0f * 3.1415926f * f * Inv_PWM_Ts; // 2*pi*f*t
     if(wt >= 2.0f * 3.1415926f)
     {
@@ -229,8 +235,7 @@ __interrupt void INT_Rec_PWM_ISR(void)
 
     else
     {
-        //Rec_Off();
-        //PuPu_Off();
+
         EPwm6Regs.CMPA.bit.CMPA = 0;
         EPwm6Regs.CMPB.bit.CMPB = 0;
 
@@ -269,95 +274,7 @@ __interrupt void INT_myCPUTIMER0_ISR(void)
     EINT;
     // --- 嵌套設定完成 ---
 
-    /*
 
-    CpuTimer0Regs.TCR.bit.TIF = 1;      //中斷嵌套 (interrupt nesting)
-
-
-    Fast_speed_ADCRESULT_to_Reg();
-
-
-
-    theta += 2.0f * 3.1415926f * f * Ts;
-    if(theta >= 2.0f * 3.1415926f)
-    {
-        theta -= 2.0f * 3.1415926f;
-        GpioDataRegs.GPATOGGLE.bit.GPIO14 = 1;
-
-
-    }
-
-    sine = sinf(theta);   // -1 ~ +1
-
-
-
-    if( sine < 0)
-    {
-        EALLOW;
-        EPwm1Regs.CMPA.bit.CMPA = (sine + 1.0f) * 2500;
-        EPwm2Regs.CMPA.bit.CMPA = 0;
-        EDIS;
-    }
-    else
-    {
-        EALLOW;
-        EPwm1Regs.CMPA.bit.CMPA = sine  * 2500;
-        EPwm2Regs.CMPA.bit.CMPA = 2501;
-        EDIS;
-    }
-
- //   EPwm2Regs.CMPA.bit.CMPA = EPwm1Regs.CMPA.bit.CMPA;
-//    EPwm2Regs.CMPA.bit.CMPA = (sine  * 25000) +2500;
-
-
-    TimeDelay++;
-    if(TimeDelay >= 250)
-    {
-        TimeDelay = 0;
-        if(Duty<=1200)   Duty++;
-
-        EPwm6Regs.AQCSFRC.bit.CSFA=0;
-        EPwm6Regs.AQCSFRC.bit.CSFB=0;
-
-        EALLOW;
-        EPwm4Regs.CMPA.bit.CMPA = 1250-Duty;
-        EPwm4Regs.CMPB.bit.CMPB = 1250+Duty;
-
-        EPwm6Regs.CMPA.bit.CMPA = 1250-Duty;
-        EPwm6Regs.CMPB.bit.CMPB = 1250+Duty;
-        EDIS;
-
-
-
-    }
-*/
-
-
-/*
-    ChaCompPara.Go_Rescue = Off; //for test
-
-    if(ChaCompPara.Go_Rescue == On)
-    {
-        BB2SB_Compensation();
-
-        BB2SB_DrivePWM();
-
-        ChaCtr_Stage = PerCh;           //設定PerCh mode, 準備結束 rescue 進入 SB2BB_Compensation()
-
-        Clr_SB2BB_Vbank_Loop();
-        Clr_SB2BB_Vstart_Loop();
-        Clr_SB2BB_Cur_Loop();
-    }
-    else
-    {
-        SB2BB_Compensation();
-
-        SB2BB_DrivePWM();
-
-        Clr_BB2SB_SV_Loop();
-        Clr_BB2SB_SI_Loop();
-    }
-*/
 
 
 
